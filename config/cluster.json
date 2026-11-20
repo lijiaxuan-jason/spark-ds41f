@@ -9,9 +9,9 @@
       "notes": "DeepSeek-V4.1-Flash, revision dba1be0a (2026-09-10)."
     },
     "v41-flash-1017": {
-      "hub": "{home}/.cache/huggingface/hub",
-      "snapshot": "models--deepseek-ai--DeepSeek-V4.1-Flash-1017/snapshots/1bae0e1088993b9b82de08f59de5be5a34e42170",
-      "notes": "DeepSeek-V4.1-Flash-1017, revision 1bae0e10 (2026-10-17): new weights; config, tokenizer and tensor layout unchanged. Its blobs link on into the hub's shared store, so the hub is mounted."
+      "snapshot": "/data/models/DeepSeek-V4.1-Flash",
+      "blobs": "/data/models/DeepSeek-V4.1-Flash",
+      "notes": "Site: local 1017 checkpoint (README.md title + index/config md5 verified against pinned 1bae0e10). Flat layout mounted via snapshot+blobs per scripts/recipe.py."
     }
   },
   "generation_defaults": {
@@ -64,7 +64,7 @@
     ]
   },
   "host": {
-    "home": "/home/swank",
+    "home": "/home/lib119",
     "memguard_gib": 3,
     "memguard_interval_seconds": 2,
     "startup_memguard_gib": 5,
@@ -200,13 +200,13 @@
     "10"
   ],
   "distributed": {
-    "master_addr": "10.0.1.71",
+    "master_addr": "10.70.200.244",
     "master_port": "9999"
   },
   "deployment": {
     "launch_enabled": true,
-    "repository": "https://github.com/christopherowen/spark-ds41f.git",
-    "branch": "main",
+    "repository": "https://github.com/lijiaxuan-jason/spark-ds41f.git",
+    "branch": "site",
     "path": "{home}/projects/spark-ds41f",
     "ready_url": "http://127.0.0.1:8000/v1/models",
     "ready_timeout_seconds": 3600
