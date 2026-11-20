@@ -1,0 +1,87 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+experiment_root="$repo_root/experiments/2026-09-20-upstream-main-rebase"
+source_root=${SOURCE_ROOT:-"$repo_root/.work/experiments/2026-09-23-blocktable"}
+mode=${1:-build}
+case "$mode" in
+  build|check) ;;
+  *) echo "usage: $0 [build|check]" >&2; exit 2 ;;
+esac
+
+vllm_base=d05da62e9ccdf8e342b15bf6785d83224cc165af
+b12x_base=0f3a8cbfd1c11d27f04e3ab37a802d522f4f1c68
+vllm_head=d9ddab37ab97df1b699b785ad3b22f3b3c862668
+b12x_head=b69feee3022c05fa840833a80dd4010156cf7fe1
+vllm_tree=92aa9f7d15c88b69bc6117963e2dcb52b81a55e5
+b12x_tree=a251f563557bcbff88b17dedd6fd6bccd859929a
+
+for project in vllm b12x; do
+  source_path="$source_root/$project"
+  if [ ! -d "$source_path/.git" ]; then
+    echo "missing prepared source: $source_path" >&2
+    echo "run $experiment_root/prepare-sources first" >&2
+    exit 1
+  fi
+  git -C "$source_path" diff --quiet
+  git -C "$source_path" diff --cached --quiet
+done
+
+actual_vllm_tree=$(git -C "$source_root/vllm" rev-parse HEAD^{tree})
+actual_b12x_tree=$(git -C "$source_root/b12x" rev-parse HEAD^{tree})
+actual_vllm_head=$(git -C "$source_root/vllm" rev-parse HEAD)
+actual_b12x_head=$(git -C "$source_root/b12x" rev-parse HEAD)
+if [ "$actual_vllm_head" != "$vllm_head" ]; then
+  echo "vLLM revision mismatch: expected $vllm_head, got $actual_vllm_head" >&2
+  exit 1
+fi
+if [ "$actual_b12x_head" != "$b12x_head" ]; then
+  echo "B12X revision mismatch: expected $b12x_head, got $actual_b12x_head" >&2
+  exit 1
+fi
+if [ "$actual_vllm_tree" != "$vllm_tree" ]; then
+  echo "vLLM tree mismatch: expected $vllm_tree, got $actual_vllm_tree" >&2
+  exit 1
+fi
+if [ "$actual_b12x_tree" != "$b12x_tree" ]; then
+  echo "B12X tree mismatch: expected $b12x_tree, got $actual_b12x_tree" >&2
+  exit 1
+fi
+
+if [ "$mode" = check ]; then
+  echo "candidate source trees match recorded identities"
+  exit 0
+fi
+
+deployment_commit=$(git -C "$repo_root" rev-parse HEAD)
+deployment_short=$(printf '%s' "$deployment_commit" | cut -c1-12)
+vllm_short=$(printf '%s' "$vllm_head" | cut -c1-12)
+b12x_short=$(printf '%s' "$b12x_head" | cut -c1-12)
+tag=${CANDIDATE_TAG:-"vllm-ds41f-upstream-main:$vllm_short-$b12x_short-d$deployment_short"}
+
+# GitHub may temporarily reject anonymous CMake FetchContent clones from a
+# shared egress address. When supplied, pass the token only through BuildKit's
+# ephemeral secret mount; it never becomes a build argument or image layer.
+set --
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+  set -- --secret "id=github_token,env=GITHUB_TOKEN"
+fi
+
+exec docker buildx build \
+  --platform linux/arm64 \
+  --network host \
+  "$@" \
+  --load \
+  --build-context "vllm-source=$source_root/vllm" \
+  --build-context "b12x-source=$source_root/b12x" \
+  --build-arg "VLLM_BASE=$vllm_base" \
+  --build-arg "VLLM_PATCH_HEAD=$vllm_head" \
+  --build-arg "VLLM_TREE=$vllm_tree" \
+  --build-arg "B12X_BASE=$b12x_base" \
+  --build-arg "B12X_PATCH_HEAD=$b12x_head" \
+  --build-arg "B12X_TREE=$b12x_tree" \
+  --build-arg "DEPLOYMENT_COMMIT=$deployment_commit" \
+  --tag "$tag" \
+  --file "$experiment_root/Dockerfile" \
+  "$experiment_root"

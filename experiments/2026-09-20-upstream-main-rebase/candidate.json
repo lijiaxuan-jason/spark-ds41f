@@ -1,0 +1,145 @@
+{
+  "intended_variable": "rebase the source stack onto current upstream architecture and retain only required DS4.1 TP3 behavior",
+  "configuration_delta": {
+    "speculative_config.enable_adaptive_verification": {
+      "from": true,
+      "to": false,
+      "reason": "upstream rejects device-trimmed verification with the hard-wired DeepseekV41IndexerBackend on SM121; fixed-block verification preserves target-model quality and is the supported path"
+    },
+    "cache.block_size": {
+      "from": 256,
+      "to": 128,
+      "reason": "128 is the exact common SM121 kernel page for the DeepSeek V4.1 indexer and B12X attention; BLHNC cannot split a padded 256-token manager page into dense 128-token kernel pages"
+    },
+    "kernel_config.enable_jit_warmup": {
+      "from": "post-weight or disabled",
+      "to": "enabled with patch-0023 pre-weight phase",
+      "reason": "compile only model/backend-registered kernels after construction and before checkpoint residency; the normal post-load drain remains a deduplicated catch-up for finalized KV-dependent registrations"
+    },
+    "compilation_config.cudagraph_mode": {
+      "from": "FULL_AND_PIECEWISE (implicitly overridden by upstream)",
+      "to": "NONE for the first guarded recovery boot",
+      "reason": "separate safe eager API recovery from graph-memory and performance qualification; after the pre-weight and B12X phases pass with measured headroom, test the upstream-selected FULL_DECODE_ONLY path as one isolated follow-up"
+    },
+    "deployment.launch_enabled": {
+      "from": true,
+      "to": false,
+      "reason": "guarded cold and warm startup pass, but deterministic chat smokes return garbled/repetitive tokens; launch is locked until target-only versus DSpark correctness is isolated"
+    }
+  },
+  "source_delta": [
+    {
+      "project": "vllm",
+      "tracking_ref": "refs/heads/main",
+      "upstream_base": "d05da62e9ccdf8e342b15bf6785d83224cc165af",
+      "candidate_commits": [
+        "277171c959846de8870732e96d23276575e88ae5",
+        "fa075bc82948914cb778a33822eea3a5d537202d",
+        "d6b40631cad4bf406f25093f56436f2b8ef10800",
+        "b445c0d44216761184760d7cd4573a495046583e",
+        "44376300f6c471dc7b1c10638e979d3e218dc194",
+        "2fa43ad553077a7838ab936b8bb0752702510a46",
+        "bd9a13a91134a780c03584293c68cb965a899e42",
+        "b97d20c2cebee9a60b71d2710ce9324373f96468",
+        "0fa1094d9bb134e43a4449577e41acab7ff39c85",
+        "f1bfa6a383a1649c0b98e12e14f34c913cea1019",
+        "f351f0ebee701dc934986744d2dcc9c977ba8efa",
+        "1e4d0816e87ab114f0d12a3bb914426d149bec3e",
+        "76aede8a51f3b4cf000b371b19f4e0b15f92a676",
+        "1d8c725d77242c16359feb3f15c9bb59b5303ab4",
+        "74de7dde01f26b344ad6085acb4764887e567e32",
+        "3adda11364767b4e67cd5117d87fd963de7b9fb5",
+        "1a14b1f098e6dca33a83a168b814f1d2fc5febcc",
+        "989f199a77ee188c91c203f182471cbc27f2ab49",
+        "8bf3113a54ae58db10397e77cd8f863944c008fe",
+        "62605500d1997ff302540d6505e26c5caba76031",
+        "9de03517c6be50eef0d20fe2d6cf02c34151a01e",
+        "6964357a771af30c341a008813ca7bba8810b2e4",
+        "c6d531aa609f83496a8471d157ef32e62895bd4b",
+        "6131c72e0f15fa9b87e8bfce6099c3564066b209",
+        "891dfb6cb1f9e7fa61547081ba346dcec405a275",
+        "329631a979ddc91191a9f13ca3d0ac4efeb9d549",
+        "6e1e038b0910ae1ed3da4e7cff24382815920c0b",
+        "67e0b2ada271f75b2f9f0de473889a0f99b2062c",
+        "d9ddab37ab97df1b699b785ad3b22f3b3c862668"
+      ],
+      "source_tree": "92aa9f7d15c88b69bc6117963e2dcb52b81a55e5",
+      "branch": "spark3/ds41f-tp3",
+      "patches": [
+        "patches/vllm/0001-model-support-quality-preserving-DeepSeek-V4.1-TP3-p.patch",
+        "patches/vllm/0002-feat-deepseek-v41-add-native-B12X-sparse-MLA-adapter.patch",
+        "patches/vllm/0003-feat-distributed-port-RoCEnante-to-prepared-B12X-pla.patch",
+        "patches/vllm/0004-feat-loader-add-owned-and-file-backed-weight-routing.patch",
+        "patches/vllm/0005-feat-deepseek-v41-stage-Engram-rows-from-disk.patch",
+        "patches/vllm/0006-fix-vocab-align-padding-to-tensor-parallel-size.patch",
+        "patches/vllm/0007-fix-deepseek-v41-avoid-B12X-warmup-module-cycle.patch",
+        "patches/vllm/0008-fix-deepseek-v41-route-custom-weights-through-loader.patch",
+        "patches/vllm/0009-fix-modelopt-materialize-lazy-MXFP8-scales-before-ex.patch",
+        "patches/vllm/0010-fix-deepseek-v41-materialize-lazy-virtual-head-group.patch",
+        "patches/vllm/0011-fix-deepseek-v41-compose-virtual-heads-with-weight-l.patch",
+        "patches/vllm/0012-fix-deepseek-v41-route-disk-Engram-descriptors-to-le.patch",
+        "patches/vllm/0013-fix-deepseek-v41-expose-disk-Engram-filter-through-V.patch",
+        "patches/vllm/0014-fix-loader-support-native-MXFP8-scale-metadata.patch",
+        "patches/vllm/0015-fix-b12x-port-MoE-to-preparation-API.patch",
+        "patches/vllm/0016-fix-b12x-isolate-pre-profile-MoE-preparation.patch",
+        "patches/vllm/0017-fix-b12x-prepare-MXFP8-linear-execution-plans.patch",
+        "patches/vllm/0018-fix-b12x-prepare-draft-model-weight-plans.patch",
+        "patches/vllm/0019-fix-b12x-prepare-RoCEnante-before-profiling.patch",
+        "patches/vllm/0020-fix-b12x-synchronize-RoCEnante-plan-priming.patch",
+        "patches/vllm/0021-fix-warmup-skip-ineligible-ll_bf16-routers.patch",
+        "patches/vllm/0022-perf-warmup-register-only-selected-model-kernels.patch",
+        "patches/vllm/0023-fix-warmup-bound-pre-profile-memory-before-weight-re.patch",
+        "patches/vllm/0024-fix-deepseek-v41-compile-TP3-fused-Q-head-geometry.patch",
+        "patches/vllm/0025-fix-deepseek-v41-skip-indexed-path-for-B12X-SWA-only.patch",
+        "patches/vllm/0026-fix-deepseek-v41-cover-B12X-speculative-warmup-rows.patch",
+        "patches/vllm/0027-fix-deepseek-v41-use-64-state-SM12x-indexer-pages.patch",
+        "patches/vllm/0028-fix-deepseek-v41-write-B12X-contiguous-cache-records.patch",
+        "patches/vllm/0029-fix-deepseek-v41-map-B12X-indexed-compressed-blocks.patch"
+      ]
+    },
+    {
+      "project": "b12x",
+      "tracking_ref": "refs/heads/master",
+      "upstream_base": "0f3a8cbfd1c11d27f04e3ab37a802d522f4f1c68",
+      "candidate_commits": [
+        "348145ea8b6adaea7c32b1b87898ff59b5d43380",
+        "803d7d795d05be3902a30e82743a817a2c26d53f",
+        "de8e7fa971eb7ae4c21e634a8931407a0b404568",
+        "c90ba030f2ab4a17959afd05461449ca47259242",
+        "b69feee3022c05fa840833a80dd4010156cf7fe1"
+      ],
+      "source_tree": "a251f563557bcbff88b17dedd6fd6bccd859929a",
+      "branch": "spark3/ds41f-tp3",
+      "patches": [
+        "patches/b12x/0001-perf-mhc-retain-qualified-3072-token-DS4.1-geometry.patch",
+        "patches/b12x/0002-feat-rocenante-route-switchless-peers-by-local-HCA.patch",
+        "patches/b12x/0003-build-align-CUTLASS-DSL-with-vLLM-main.patch",
+        "patches/b12x/0004-fix-vllm-support-upstream-managed-weight-loading.patch",
+        "patches/b12x/0005-fix-rocenante-key-prepared-kernels-by-route-stripes.patch"
+      ]
+    }
+  ],
+  "base_image": {
+    "reference": "docker.io/vllm/vllm-openai:nightly-d05da62e9ccdf8e342b15bf6785d83224cc165af",
+    "index_digest": "sha256:f29125bcc6d276ed38a67c9dfd4e51ccbaba09ad92847a0913c0df38d9c05c71",
+    "arm64_manifest_digest": "sha256:54c653f0a663ac04a92c25aba60f264c6eb203635b1ad1f627eb932ae453609b"
+  },
+  "image_digest": "sha256:470bd39a205cb4c75bd403ea0976735d56506e4096c165cfcf5207771c968bff",
+  "failed_image_digest": "sha256:b9c4e1264f2f7fa1d0de93b3db0e452e732e754608595b654f38e65f6e4df2a7",
+  "last_qualified_image_digest": "sha256:f3de2589ce252cbec60c5ef18ecc44b9d5a869324655ed1dc2486360ad3c4fd1",
+  "superseded_image_digest": "sha256:f3de2589ce252cbec60c5ef18ecc44b9d5a869324655ed1dc2486360ad3c4fd1",
+  "deployment_status": "patch 0029 candidate is running on all three DGX nodes with active 3 GiB steady guards; clean V2 target-only chat, four-way short concurrency, and 4,827-token retrieval pass; full promotion qualification and current-head rebase remain separate",
+  "integration_status": {
+    "status": "clean patch-0029 target-only semantic smoke passes on all three ranks; full performance and long-context qualification pending",
+    "upstream_native_path": "DS4.1 keeps the upstream model, CED/indexer, allocator, and projections; B12X owns sparse MLA kernels, direct ordinary-weight loading, and bounded disk Engram row staging",
+    "missing_vllm_consumers": [],
+    "b12x_source_commits_reachable_from_vllm": true,
+    "details": "donor-analysis.md"
+  },
+  "compatibility_gate": {
+    "status": "patch-0029-clean-v2-runtime-semantic-smoke-pass-full-promotion-qualification-pending",
+    "vllm_cutlass_dsl": "4.7.1",
+    "b12x_cutlass_dsl": "4.7.1",
+    "details": "compatibility.md"
+  }
+}

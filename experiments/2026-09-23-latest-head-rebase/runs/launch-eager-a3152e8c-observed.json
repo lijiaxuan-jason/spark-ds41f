@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "result": "api_ready_performance_measured_quality_gate_open",
+  "configuration": "cluster-eager.json at c2640f32dfac545d22b969e7738525f94a6aa2e4",
+  "image_id": "sha256:a3152e8cf0cde66a2997bdf6fa0ce7001dc2cf62a9b8bf1d8a95cbd5a1ad354a",
+  "startup": "all three ranks reached API readiness; 5 GiB startup guards switched to active 3 GiB steady guards; no Docker OOM kill",
+  "memory_observations": {
+    "after_ready_kib": {"dgx1": 8453528, "dgx2": 10034788, "dgx3": 9510204},
+    "after_long_context_kib": {"dgx1": 7380976, "dgx2": 8127960, "dgx3": 8111228},
+    "note": "sampled MemAvailable, not continuous minima"
+  },
+  "semantic": {
+    "arithmetic": "1 + 1 = returned a continuation beginning with 2",
+    "prose": "coherent explanation of exact speculative rejection sampling; normal stop at 189 completion tokens",
+    "code": "failed requested LRU implementation: two deterministic responses used parameter name valueazon while assigning an undefined value; thinking-disabled request used valueerk with the same undefined assignment",
+    "code_logprobs": "with thinking disabled, the model strongly selected the preceding ' value' and '(key' tokens, then gave diffuse next-token distributions led by 'azon' (logprob -2.32) and 'uit' (-2.96); the malformed suffix is present in generated logits, not response formatting",
+    "exact_prefix_control": "the exact 29-token chat prompt plus 85 generated token IDs ending in ' value' was sent as a 114-token completion prompt: live decode selected stray ' recon', while one-token forced prefill selected '):\\n' with logprob -0.00103. A separate completions decode from the same 29-token prompt produced valueerk. Another failing chat selected ' splash', while a forced continuation from its exact prefix generated 15 valid subsequent tokens. A successful repeat matched forced next tokens at five earlier checkpoints. The fault is intermittent in accumulated generation state, not a deterministic tokenizer or chat-only error",
+    "b12x_native_24_head_check": "the legacy helper failed on its old plan API, then the current prepared-API synthetic FP8 V4.1 decode test passed at 24 local heads under a 4 GiB cap on dgx3. It uses 64-token pages and does not validate live cache writes or the full model. Synthetic V2 Engram hash chunk and TP3 disk lookup controls also passed; the separate model-state fixture predates the local disk-Engram extension and failed before its gather assertion",
+    "code_benchmark_prompt": "a separate 768-token response to the benchmark's full code prompt spent the entire limit in reasoning and returned no final content; the 256-token throughput cases therefore measure token generation, not code quality",
+    "evidence": [
+      "runs/consolidated-managed/code-semantic.json",
+      "runs/consolidated-managed/code-semantic-repeat.json",
+      "runs/consolidated-managed/code-no-thinking.json",
+      "runs/consolidated-managed/code-logprobs.json",
+      "runs/consolidated-managed/code-benchmark-semantic.json",
+      "runs/consolidated-managed/code-prefill-next.json",
+      "runs/consolidated-managed/code-exact-prefix-probe.json",
+      "runs/consolidated-managed/code-completion-decode-control.json",
+      "runs/consolidated-managed/code-decode-divergence.json",
+      "runs/consolidated-managed/code-forced-continuation.json",
+      "runs/capped-component-controls.json"
+    ]
+  },
+  "long_context": {
+    "status": "8K, 64K, 128K, and near-160K admissions returned HTTP 200",
+    "prompt_tokens": [8206, 65550, 131086, 159014],
+    "qualification_limit": "repetitive prefix-cached prompts returned an empty one-token stop; these prove admission and memory fit, not long-context answer quality or cold-prefill speed"
+  },
+  "performance": "30/30 matched 256-token requests succeeded; see performance-bridge.md and runs/consolidated-managed/",
+  "deployment": "experimental candidate still running on all three nodes; promoted config/cluster.json unchanged",
+  "next_gate": "isolate the incremental state component with one controlled alternate-path experiment; do not enable graphs/DSpark or promote until repeated code output passes"
+}

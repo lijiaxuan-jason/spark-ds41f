@@ -1,0 +1,79 @@
+# Overlap the attention's reduce-scatter with its WO projection (r6d)
+
+Owner, 2026-10-10: after benchmarking the r6d candidate, overlap the
+reduce-scatter with compute (step 2), then fuse its sum (step 3).
+
+## Why
+
+r6d's deterministic reduce-scatter (C3) carries a third more wire bytes than
+NCCL's ring on ring4 and costs 2-3% of prefill. Under prefill sequence
+parallelism every decoder layer reduce-scatters twice: the attention's WO
+output and the MoE output. At an 8192-token step the WO projection (B12X,
+about 4.2 ms) and its reduce-scatter (about 4.6 ms on the fabric) run back to
+back, so hiding one under the other is worth more than C3's cost.
+
+## What changes (vLLM branch `r6d-overlap`, on r6d's tree)
+
+- `440d27195` (module): `SPRows.project_reduce_scatter(project, ...)`. In
+  slices, each rank's block is projected piece by piece into one contiguous
+  buffer per piece, and each piece is reduce-scattered on a side stream while
+  the next is projected; with one slice it is the existing path.
+- `0cd9a8d9c` (switch): under the TileLang family, sequence-parallel steps of
+  2048 tokens or more project WO in two slices. The L2 prefetch of the next
+  FFN weights still issues after the last projection, before the last
+  reduce-scatter is awaited.
+
+The bits do not change: B12X's WO rows are independent of one another (the
+migration's B1 bench found its batch-invariant), and the rank-order sum is per
+element. The B12X family keeps one projection, since NCCL's ring sums depend on
+the message size. The MoE output is not sliced: its reduce-scatter input is
+the shared and routed experts' BF16 sum per rank, which cannot be split
+without changing that rounding.
+
+## Arms ([w1.json](w1.json))
+
+`overlap.json` mounts the two changed files over the r6d image
+([make_arms.py](make_arms.py)); the control is r6d's recipe. The kernel bundle
+runs the layout test in the r6d image. The lean screen adds the
+temperature-0 output check and mixed-traffic latency; prefill at 16K tokens
+runs two 8096-token chunks, the sliced steps.
+
+Window 1 first rebuilds `-r6d` with the router fix of the r6d gate (patch
+0072; the image job replaces the stale tag on every node) and reruns the gate
+tests in it, then the layout test and the screen.
+
+Acceptance: temperature-0 outputs identical, decode level, prefill faster
+than r6d.
+
+## Status
+
+Window 1 (2026-10-10, 16:19-16:47 UTC): the r6d image rebuilt with the
+router fix (the stale tag removed on all four nodes, built in 10 minutes,
+copied over the CX7 links, one image ID `sha256:795eb1c7`); r6d's gate tests
+and the layout test pass in it; the r6d arm ran. The overlap arm did not boot:
+`overlap.json` was generated from r6d's recipe before the router fix and kept
+the old vLLM tree label, which the TileLang preflight refuses. Regenerated;
+a repository test now checks every TileLang profile's expected trees against
+its lock's manifest. Window 2 ([w2.json](w2.json)) reruns the screen.
+
+Window 2 (2026-10-10, 16:54-17:18 UTC, r6d / overlap / r6d bracket):
+
+| Measure | r6d | overlap | r6d (end) |
+| --- | --- | --- | --- |
+| prose c1 step | 31.59 ms | 31.52 ms (-0.2%) | 31.43 ms (-0.5%) |
+| json c1 step | 36.66 ms | 36.72 ms (+0.2%) | 37.04 ms (+1.0%) |
+| single stream, distinct prompts | 87.09 tok/s | +0.2% | +0.3% |
+| eight distinct concurrent prompts | 175.77 tok/s | +0.0% | -0.1% |
+| cold prefill 1K | 2673 tok/s | 2655 (-0.7%) | 2627 (-1.7%) |
+| cold prefill 16K | 5594 tok/s | 5721 (+2.3%) | 5610 (+0.3%) |
+| mixed: short TTFT median | 233.4 ms | -7.1% | -8.7% |
+| mixed: long TTFT mean | 903.6 ms | +1.8% | +0.9% |
+| mixed: gap p99 | 799.9 ms | +1.1% | -1.1% |
+| temperature 0 | identical | identical | identical |
+
+The overlap keeps the outputs bit-identical in every scenario and decode
+level. Prefill at 16K tokens, the only measure whose steps are sliced, is 2.0%
+faster than the mean of the two r6d runs, about the size of C3's measured cost
+at that length. The 1K prefill and mixed-traffic changes are within the
+bracket's own spread (its two r6d runs differ by 1.7% and 1.6%). The overlap is
+a candidate to fold into r6d before promotion; that is the owner's call.

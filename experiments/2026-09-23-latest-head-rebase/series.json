@@ -1,0 +1,91 @@
+{
+  "vllm": {
+    "upstream_base": "0f2a15c9277f34c9afe141cf578d1f02b3bebdfe",
+    "expected_tree": "eddf87778c8d3617eb5b40b57d05cae8b95ec0c2",
+    "patch_head": "1b6675db79b8b73674ab1e738c36d6c62fcc31bd",
+    "patches": [
+      {
+        "concept": "tp3_vocab",
+        "patch": "patches/vllm/0001-tp3-vocab.patch",
+        "files": 2
+      },
+      {
+        "concept": "modelopt_scales",
+        "patch": "patches/vllm/0002-modelopt-scales.patch",
+        "files": 2
+      },
+      {
+        "concept": "file_backed_loader",
+        "patch": "patches/vllm/0003-file-backed-loader.patch",
+        "files": 18
+      },
+      {
+        "concept": "selected_jit_warmup",
+        "patch": "patches/vllm/0004-selected-jit-warmup.patch",
+        "files": 29
+      },
+      {
+        "concept": "b12x_plan_preparation",
+        "patch": "patches/vllm/0005-b12x-plan-preparation.patch",
+        "files": 8
+      },
+      {
+        "concept": "rocenante",
+        "patch": "patches/vllm/0006-rocenante.patch",
+        "files": 5
+      },
+      {
+        "concept": "deepseek_tp3_model",
+        "patch": "patches/vllm/0007-deepseek-tp3-model.patch",
+        "files": 4
+      },
+      {
+        "concept": "disk_engram",
+        "patch": "patches/vllm/0008-disk-engram.patch",
+        "files": 8
+      },
+      {
+        "concept": "b12x_sparse_adapter",
+        "patch": "patches/vllm/0009-b12x-sparse-adapter.patch",
+        "files": 5
+      },
+      {
+        "concept": "native_24_head",
+        "patch": "patches/vllm/0010-native-24-head.patch",
+        "files": 2
+      }
+    ]
+  },
+  "b12x": {
+    "upstream_base": "0332cc5089137753d3af43d1c643516b4350359f",
+    "expected_tree": "10d92859133e063e82a57d57d02eafe3ba212290",
+    "patch_head": "355611878e2ee316a74fd22d913d4db8d23c9306",
+    "patches": [
+      {
+        "concept": "cutlass_dsl_alignment",
+        "patch": "patches/b12x/0001-cutlass-dsl-alignment.patch",
+        "files": 1
+      },
+      {
+        "concept": "switchless_rocenante",
+        "patch": "patches/b12x/0002-switchless-rocenante.patch",
+        "files": 5
+      },
+      {
+        "concept": "mhc_3072_tuning",
+        "patch": "patches/b12x/0003-mhc-3072-tuning.patch",
+        "files": 2
+      },
+      {
+        "concept": "vllm_loader_lifecycle",
+        "patch": "patches/b12x/0004-vllm-loader-lifecycle.patch",
+        "files": 2
+      },
+      {
+        "concept": "managed_model_weights",
+        "patch": "patches/b12x/0005-managed-model-weights.patch",
+        "files": 6
+      }
+    ]
+  }
+}

@@ -1,0 +1,129 @@
+name: validate
+
+# Outside contributors' pull requests, a weekly run of main and manual runs.
+# A pull request from a branch of this repository (the owner's and agents' work)
+# gets skipped checks at once, so nothing waits on GitHub; the local unit suite
+# is the gate for that work. There is no push trigger: a push here or to a
+# contributor's fork starts nothing.
+on:
+  pull_request:
+  schedule:
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # A pull request's merge commit and the base it merges into.
+          fetch-depth: 2
+      - name: Use the example site
+        run: scripts/example_site.py
+      - name: Validate every shape of the recipe
+        run: |
+          for shape in $(python3 -c 'import json; print(*json.load(open("config/cluster.json"))["shapes"])'); do
+            bin/spark --shape "$shape" doctor
+          done
+      - name: Compile helper
+        run: python3 -m py_compile bin/spark
+      - name: Unit tests
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --quiet --require-hashes -r requirements/bench-client.txt
+          .venv/bin/python -m unittest discover -s tests
+      - name: Validate helpers
+        run: |
+          # scripts/ holds shell and Python helpers and JSON lab specs; check each by
+          # its type (the unit tests above leave __pycache__ behind).
+          find scripts -type f -not -path '*/__pycache__/*' -print0 \
+            | while IFS= read -r -d '' file; do
+                case "$file" in
+                  *.py) python3 -m py_compile "$file" ;;
+                  *.json) python3 -m json.tool "$file" >/dev/null ;;
+                  *.sh) bash -n "$file" ;;
+                  *)
+                    case "$(head -n1 "$file")" in
+                      *python*) python3 -m py_compile "$file" ;;
+                      *) bash -n "$file" ;;
+                    esac
+                    ;;
+                esac
+              done
+          find experiments -type f -name 'prepare-sources' -print0 \
+            | while IFS= read -r -d '' file; do
+                case "$(head -n1 "$file")" in
+                  *python*) python3 -c 'import ast, sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' "$file" ;;
+                  *) sh -n "$file" ;;
+                esac
+              done
+      - name: Validate JSON
+        run: |
+          find config manifests experiments -name '*.json' -print0 \
+            | xargs -0 -n1 python3 -m json.tool >/dev/null
+      - name: Check manifest-generated docs and GitHub Page
+        run: python3 scripts/render_docs.py --check
+      - name: Check the pull request's whitespace
+        if: github.event_name == 'pull_request'
+        # .gitattributes exempts patches and recorded outputs.
+        run: git diff --check HEAD^1 HEAD
+
+  # The patch stacks take minutes to fetch: a pull request runs them only when it
+  # touches a series, the lock or the helper that prepares them.
+  changes:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-24.04
+    outputs:
+      patches: ${{ steps.paths.outputs.patches }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+      - id: paths
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" != pull_request ] || git diff --name-only HEAD^1 HEAD | grep -qE \
+              '^(patches/|upstreams\.lock\.json$|bin/spark$|experiments/[^/]+/(vllm|b12x|nccl[^/]*|tilelang|tile_kernels)/|experiments/2026-10-03-balanced-policy/)'; then
+            echo patches=true >> "$GITHUB_OUTPUT"
+          else
+            echo patches=false >> "$GITHUB_OUTPUT"
+          fi
+
+  patch-stacks:
+    needs: changes
+    if: needs.changes.outputs.patches == 'true'
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        source: [vllm, b12x, nccl, tilelang, tile_kernels]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Use the example site
+        run: scripts/example_site.py
+      - name: Apply the local series and check the recorded patch head and tree
+        run: bin/spark build prepare --only "${{ matrix.source }}"
+
+  # Production applies this experiment's adaptive NCCL series.
+  nccl-adaptive-plans:
+    needs: changes
+    if: needs.changes.outputs.patches == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      BALANCED_TEST_PROFILE: experiments/2026-10-03-balanced-policy/adaptive.json
+    steps:
+      - uses: actions/checkout@v5
+      - run: scripts/example_site.py
+      - run: bin/spark --cluster-config experiments/2026-10-03-balanced-policy/adaptive.json build prepare --only nccl
+      - run: python3 experiments/2026-10-03-balanced-policy/test-policy.py
+      - run: python3 experiments/2026-10-03-balanced-policy/test-allocation.py
+      - run: python3 experiments/2026-10-03-balanced-policy/test-threads.py

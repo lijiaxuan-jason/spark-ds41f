@@ -1,0 +1,21 @@
+{
+  "intended_variable": "upstream source revisions from the pinned September 23 heads",
+  "configuration_delta": {},
+  "runtime_action": "managed-weight TP3 candidate running under steady guards; quality gate open",
+  "source_delta": {
+    "vllm": {
+      "upstream_commit": "0f2a15c9277f34c9afe141cf578d1f02b3bebdfe",
+      "patch_head": "1b6675db79b8b73674ab1e738c36d6c62fcc31bd",
+      "source_tree": "eddf87778c8d3617eb5b40b57d05cae8b95ec0c2",
+      "concept_patches": 10
+    },
+    "b12x": {
+      "upstream_commit": "0332cc5089137753d3af43d1c643516b4350359f",
+      "patch_head": "355611878e2ee316a74fd22d913d4db8d23c9306",
+      "source_tree": "10d92859133e063e82a57d57d02eafe3ba212290",
+      "concept_patches": 5
+    }
+  },
+  "omitted_local_behavior": [],
+  "status": "managed-weight image sha256:a3152e8c reached API readiness, passed 159K context admission and the serving matrix, but deterministic LRU output contains malformed identifiers; do not promote"
+}
